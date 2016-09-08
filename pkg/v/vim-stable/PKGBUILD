@@ -1,0 +1,118 @@
+# Maintainer: Thomas Dziedzic <gostrc@gmail.com>
+# Contributor: Jan "heftig" Steffens <jan.steffens@gmail.com>
+# Contributor: tobias [ tobias at archlinux org ]
+# Contributor: Daniel J Griffiths <ghost1227@archlinux.us>
+# Customized: Tosainu <tosainu.maple@gmail.com>
+# Customized: lancs <linuxcompitech@gmail.com>
+
+pkgbase=vim-stable
+pkgname=('vim-stable' 'vim-runtime-stable')
+pkgver=7.4.488
+_versiondir=74
+pkgrel=1
+arch=('i686' 'x86_64')
+license=('custom:vim')
+conflicts=('vim' 'vim-runtime')
+url='http://www.vim.org'
+makedepends=('gawk' 'gpm' 'libxt' 'luajit' 'python' 'ruby')
+source=(http://burnleylinux.bplaced.net/vim-stable-7.4.488.tar.gz)
+sha1sums=('SKIP')
+
+prepare() {
+  cd "${srcdir}"/vim-stable-$pkgver
+
+  (cd src && autoconf)
+
+  ./configure \
+    --prefix=/usr \
+    --localstatedir=/var/lib/vim \
+    --with-compiledby=Tosainu \
+    --with-features=huge \
+    --with-x \
+    --disable-gui \
+    --disable-netbeans \
+    --enable-fail-if-missing \
+    --enable-luainterp --with-luajit \
+    --enable-multibyte \
+    --enable-perlinterp \
+    --enable-python3interp \
+    --enable-rubyinterp
+}
+
+build() {
+  cd "${srcdir}"/vim-stable-$pkgver
+
+  make
+}
+
+check() {
+  # disable tests because they seem to freeze
+
+  cd "${srcdir}"/vim-stable-$pkgver
+
+  #make test
+}
+
+package_vim-stable() {
+  pkgdesc='Vi Improved, a highly configurable, improved version of the vi text editor'
+  depends=("vim-runtime-stable=${pkgver}-${pkgrel}" 'acl' 'gpm' 'libxt' 'luajit' 'python' 'ruby')
+  conflicts=('gvim' 'vim-minimal' 'vim-python3')
+  provides=('xxd')
+  replaces=('vim-python3' 'vim-minimal')
+
+  cd "${srcdir}"/vim-stable-$pkgver
+
+  make -j1 DESTDIR="${pkgdir}" install
+
+
+  # provided by (n)vi in core
+  rm "${pkgdir}"/usr/bin/{ex,view}
+
+  # delete some manpages
+  find "${pkgdir}"/usr/share/man -type d -name 'man1' 2>/dev/null | \
+    while read _mandir; do
+    cd ${_mandir}
+    rm -f ex.1 view.1 # provided by (n)vi
+    rm -f evim.1    # this does not make sense if we have no GUI
+  done
+
+  # Runtime provided by runtime package
+  rm -r "${pkgdir}"/usr/share/vim
+
+  # license
+  install -Dm644 runtime/doc/uganda.txt \
+    "${pkgdir}"/usr/share/licenses/${pkgname}/license.txt
+}
+
+package_vim-runtime-stable() {
+  pkgdesc='Runtime for vim and gvim'
+
+  cd "${srcdir}"/vim-stable-$pkgver
+
+  make -j1 DESTDIR="${pkgdir}" install
+
+  # man and bin files belong to 'vim'
+  rm -r "${pkgdir}"/usr/share/man/ "${pkgdir}"/usr/bin/
+
+
+  # Don't forget logtalk.dict
+  install -Dm644 runtime/ftplugin/logtalk.dict \
+    "${pkgdir}"/usr/share/vim/vim${_versiondir}/ftplugin/logtalk.dict
+
+  # fix FS#17216
+  sed -i 's|messages,/var|messages,/var/log/messages.log,/var|' \
+    "${pkgdir}"/usr/share/vim/vim${_versiondir}/filetype.vim
+
+  # patch filetype.vim for better handling of pacman related files
+  sed -i "s/rpmsave/pacsave/;s/rpmnew/pacnew/;s/,\*\.ebuild/\0,PKGBUILD*,*.install/" \
+    "${pkgdir}"/usr/share/vim/vim${_versiondir}/filetype.vim
+  sed -i "/find the end/,+3{s/changelog_date_entry_search/changelog_date_end_entry_search/}" \
+    "${pkgdir}"/usr/share/vim/vim${_versiondir}/ftplugin/changelog.vim
+
+  # license
+  install -dm755 "${pkgdir}"/usr/share/licenses/vim-runtime
+  ln -s /usr/share/vim/vim${_versiondir}/doc/uganda.txt \
+    "${pkgdir}"/usr/share/licenses/vim-runtime/license.txt
+}
+
+# vim:set sw=2 sts=2 et:
